@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 import board_recognition as br
-# import matplotlib.pyplot as plt
 
 import sys
 from PySide6.QtWidgets import (QApplication, QFileDialog, QDialog, QVBoxLayout, 
@@ -273,6 +272,3 @@ if ret:
 
 else:
     print("Failed to analyze board")
-
-# plt.imshow(board)
-# plt.show()
