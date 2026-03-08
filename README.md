@@ -1,5 +1,7 @@
 # reversi_to_clipboard
 
+A Python program that recognizes the Reversi board state from an image file or screenshot and outputs it to the clipboard in SGF or text format.  
+
 画像ファイルまたはスクリーンショットからリバーシの盤面を認識し、SGF形式またはテキスト形式でクリップボードに出力するpythonプログラム
 
 ## Usage
