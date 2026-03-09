@@ -345,4 +345,4 @@ while True:
     # 設定を保存
     last_source = dialog.source
     last_format = dialog.format
-    time.sleep(2)
+    time.sleep(0.5)
