@@ -72,8 +72,11 @@ class SelectionDialog(QDialog):
         turn_group = QGroupBox("Next Turn")
         turn_layout = QVBoxLayout()
         self.auto_turn_radio = QRadioButton("Auto")
+        self.auto_turn_radio.setShortcut("A")
         self.black_turn_radio = QRadioButton("Black (X)")
+        self.black_turn_radio.setShortcut("B")
         self.white_turn_radio = QRadioButton("White (O)")
+        self.white_turn_radio.setShortcut("W")
 
         if self.turn == "black":
             self.black_turn_radio.setChecked(True)
