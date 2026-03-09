@@ -16,11 +16,12 @@ from PySide6.QtCore import Qt, QRect, QPoint
 from PySide6.QtGui import QPainter, QColor, QScreen, QPixmap
 
 class SelectionDialog(QDialog):
-    def __init__(self, initial_source="capture", initial_format="text", last_rect=None):
+    def __init__(self, initial_source="capture", initial_format="text", initial_turn="auto", last_rect=None):
         super().__init__()
         self.setWindowTitle("Reversi to Clipboard")
         self.source = initial_source
         self.format = initial_format
+        self.turn = initial_turn
         self.last_rect = last_rect
         
         layout = QVBoxLayout()
@@ -66,6 +67,26 @@ class SelectionDialog(QDialog):
         format_layout.addWidget(self.ggf_radio)
         format_group.setLayout(format_layout)
         layout.addWidget(format_group)
+
+        # Turn Selection
+        turn_group = QGroupBox("Next Turn")
+        turn_layout = QVBoxLayout()
+        self.auto_turn_radio = QRadioButton("Auto")
+        self.black_turn_radio = QRadioButton("Black (X)")
+        self.white_turn_radio = QRadioButton("White (O)")
+
+        if self.turn == "black":
+            self.black_turn_radio.setChecked(True)
+        elif self.turn == "white":
+            self.white_turn_radio.setChecked(True)
+        else:
+            self.auto_turn_radio.setChecked(True)
+
+        turn_layout.addWidget(self.auto_turn_radio)
+        turn_layout.addWidget(self.black_turn_radio)
+        turn_layout.addWidget(self.white_turn_radio)
+        turn_group.setLayout(turn_layout)
+        layout.addWidget(turn_group)
         
         # Buttons
         btn_layout = QHBoxLayout()
@@ -93,6 +114,13 @@ class SelectionDialog(QDialog):
             self.format = "sgf"
         elif self.ggf_radio.isChecked():
             self.format = "ggf"
+
+        if self.black_turn_radio.isChecked():
+            self.turn = "black"
+        elif self.white_turn_radio.isChecked():
+            self.turn = "white"
+        else:
+            self.turn = "auto"
         self.accept()
 
 class CaptureOverlay(QWidget):
@@ -150,9 +178,9 @@ class CaptureOverlay(QWidget):
 # QApplication インスタンスを作成
 app = QApplication(sys.argv)
 
-def show_dialog(default_source="capture", default_format="text", last_rect=None):
+def show_dialog(default_source="capture", default_format="text", default_turn="auto", last_rect=None):
     # 設定の選択
-    dialog = SelectionDialog(default_source, default_format, last_rect)
+    dialog = SelectionDialog(default_source, default_format, default_turn, last_rect)
     if dialog.exec() != QDialog.Accepted:
         sys.exit()
 
@@ -284,11 +312,16 @@ def show_dialog(default_source="capture", default_format="text", last_rect=None)
                 output_str += ";AB" + sgf_black
             if sgf_white:
                 output_str += ";AW" + sgf_white
-            # 手番を PL[B] or PL[W] で追加. 全石数が偶数なら黒番とする
-            if len(result.disc) % 2 == 0:
+            if dialog.turn == "black":
                 output_str += ";PL[B]"
-            else:
+            elif dialog.turn == "white":
                 output_str += ";PL[W]"
+            else:
+                # 手番を PL[B] or PL[W] で追加. 全石数が偶数なら黒番とする
+                if len(result.disc) % 2 == 0:
+                    output_str += ";PL[B]"
+                else:
+                    output_str += ";PL[W]"
             
             output_str += ")"
         elif dialog.format == "ggf":
@@ -306,10 +339,15 @@ def show_dialog(default_source="capture", default_format="text", last_rect=None)
                         output_str += "-"
             
             # 手番
-            if len(result.disc) % 2 == 0:
+            if dialog.turn == "black":
                 output_str += " *]"
-            else:
+            elif dialog.turn == "white":
                 output_str += " O]"
+            else:
+                if len(result.disc) % 2 == 0:
+                    output_str += " *]"
+                else:
+                    output_str += " O]"
             output_str += ";)"
         else:
             # テキスト形式での出力
@@ -325,10 +363,15 @@ def show_dialog(default_source="capture", default_format="text", last_rect=None)
             
             output_str += " "
             # 手番
-            if len(result.disc) % 2 == 0:
+            if dialog.turn == "black":
                 output_str += "X"
-            else:
+            elif dialog.turn == "white":
                 output_str += "O"
+            else:
+                if len(result.disc) % 2 == 0:
+                    output_str += "X"
+                else:
+                    output_str += "O"
 
     else:
         output_str = "Failed to analyze board"
@@ -339,10 +382,12 @@ def show_dialog(default_source="capture", default_format="text", last_rect=None)
 
 last_source = "capture"
 last_format = "text"
+last_turn = "auto"
 last_rect = None
 while True:
-    dialog, last_rect = show_dialog(last_source, last_format, last_rect)
+    dialog, last_rect = show_dialog(last_source, last_format, last_turn, last_rect)
     # 設定を保存
     last_source = dialog.source
     last_format = dialog.format
+    last_turn = dialog.turn
     time.sleep(0.5)
