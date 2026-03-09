@@ -8,12 +8,12 @@ A Python program that recognizes the Reversi board state from an image file or s
 
 Run the following command to copy the reversi game record to the clipboard:
 
-```bash / cmd / pwsh
+```bash/cmd/pwsh
 python reversi_to_clipboard.py
 ```
 
 Then, type CTRL+V on the "Egaroucid" reversi application window.  
-(*) Egaroucid does not support SGF format. Use text format.
+(*) Egaroucid does not support SGF format. Use GGF or text format.
 
 ## License
 
