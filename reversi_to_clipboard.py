@@ -94,6 +94,7 @@ class SelectionDialog(QDialog):
         # Buttons
         btn_layout = QHBoxLayout()
         ok_btn = QPushButton("OK")
+        ok_btn.setFixedHeight(ok_btn.sizeHint().height() * 3)
         ok_btn.clicked.connect(self.accept_settings)
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
