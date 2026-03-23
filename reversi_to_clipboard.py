@@ -3,22 +3,79 @@ import cv2
 import board_recognition as br
 import pyperclip
 import time
-
 import sys
-from PySide6.QtWidgets import (QApplication, QFileDialog, QDialog, QVBoxLayout, 
-                             QPushButton, QLabel, QWidget)
-from PySide6.QtCore import Qt, QRect, QPoint
-from PySide6.QtGui import QPainter, QColor, QScreen, QPixmap
+from typing import Optional, Any, cast, TYPE_CHECKING
 
 from PySide6.QtWidgets import (QApplication, QFileDialog, QDialog, QVBoxLayout, 
                              QPushButton, QLabel, QWidget, QRadioButton, QGroupBox, QHBoxLayout)
-from PySide6.QtCore import Qt, QRect, QPoint
-from PySide6.QtGui import QPainter, QColor, QScreen, QPixmap
+from PySide6.QtCore import Qt, QRect, QPoint, Signal, QObject
+from PySide6.QtGui import QPainter, QColor, QScreen, QPixmap, QImage
+import threading
+import ctypes
+from ctypes import wintypes
+
+
+class HotkeyEmitter(QObject):
+    hotkey_pressed = Signal()
+
+
+def _start_windows_hotkey_listener(emitter: HotkeyEmitter, holder: dict):
+    """スレッド内で Windows のメッセージループを開始し、F4 押下時に emitter.hotkey_pressed を emit する。"""
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    # F4 の仮想キーコードは 0x73
+    VK_F4 = 0x73
+    HOTKEY_ID = 1
+    WM_HOTKEY = 0x0312
+
+    # スレッド ID を共有オブジェクトに保存
+    thread_id = kernel32.GetCurrentThreadId()
+    holder["thread_id"] = thread_id
+
+    if not user32.RegisterHotKey(None, HOTKEY_ID, 0, VK_F4):
+        err = kernel32.GetLastError()
+        print(f"RegisterHotKey failed (VK={hex(VK_F4)}), GetLastError={err}")
+        return
+
+    try:
+        msg = wintypes.MSG()
+        while True:
+            res = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+            if res == 0:
+                break
+            if msg.message == WM_HOTKEY:
+                try:
+                    emitter.hotkey_pressed.emit()
+                except Exception:
+                    pass
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+    finally:
+        user32.UnregisterHotKey(None, HOTKEY_ID)
+
+if TYPE_CHECKING:
+    # Type-checker-only fallbacks for attributes that some PySide6 stubs may miss
+    class _QtStub:  # pragma: no cover
+        WindowStaysOnTopHint: int
+        FramelessWindowHint: int
+        Tool: int
+        CrossCursor: int
+        LeftButton: int
+
+    class _QDialogStub:  # pragma: no cover
+        Accepted: int
+
+    class _QImageStub:  # pragma: no cover
+        Format_RGBA8888: int
+
+    Qt = _QtStub()  # type: ignore
+    QDialog = _QDialogStub  # type: ignore
+    QImage = _QImageStub  # type: ignore
 
 class SelectionDialog(QDialog):
     def __init__(self, initial_source="capture", initial_format="text", initial_turn="auto", last_rect=None):
         super().__init__()
-        self.setWindowTitle("Reversi to Clipboard")
+        self.setWindowTitle("Reversi to Clipboard")  # type: ignore[attr-defined]
         self.source = initial_source
         self.format = initial_format
         self.turn = initial_turn
@@ -93,16 +150,16 @@ class SelectionDialog(QDialog):
         
         # Buttons
         btn_layout = QHBoxLayout()
-        ok_btn = QPushButton("OK")
+        ok_btn = QPushButton("OK (F4)")
         ok_btn.setFixedHeight(ok_btn.sizeHint().height() * 3)
         ok_btn.clicked.connect(self.accept_settings)
         cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
+        cancel_btn.clicked.connect(self.reject)  # type: ignore[attr-defined]
         btn_layout.addWidget(ok_btn)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
         
-        self.setLayout(layout)
+        self.setLayout(layout)  # type: ignore[attr-defined]
 
     def accept_settings(self):
         if self.file_radio.isChecked():
@@ -125,23 +182,23 @@ class SelectionDialog(QDialog):
             self.turn = "white"
         else:
             self.turn = "auto"
-        self.accept()
+        self.accept()  # type: ignore[attr-defined]
 
 class CaptureOverlay(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)  # type: ignore[attr-defined]
         self.setWindowOpacity(0.3)
         self.setStyleSheet("background-color: black;")
-        self.setCursor(Qt.CrossCursor)
+        self.setCursor(Qt.CrossCursor)  # type: ignore[attr-defined]
         
         # 全画面表示
         screen = QApplication.primaryScreen()
         self.setGeometry(screen.geometry())
         
-        self.start_pos = None
-        self.end_pos = None
-        self.capture_pixmap = None
+        self.start_pos: Optional[QPoint] = None
+        self.end_pos: Optional[QPoint] = None
+        self.capture_pixmap: Optional[QPixmap] = None
         self.is_selecting = False
 
     def paintEvent(self, event):
@@ -153,7 +210,7 @@ class CaptureOverlay(QWidget):
             painter.drawRect(rect)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.LeftButton:  # type: ignore[attr-defined]
             self.start_pos = event.position().toPoint()
             self.is_selecting = True
 
@@ -163,21 +220,26 @@ class CaptureOverlay(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.is_selecting:
+        if event.button() == Qt.LeftButton and self.is_selecting:  # type: ignore[attr-defined]
             self.end_pos = event.position().toPoint()
             self.is_selecting = False
             self.capture_area()
             self.close()
 
     def capture_area(self):
-        self.rect = QRect(self.start_pos, self.end_pos).normalized()
-        if self.rect.width() < 10 or self.rect.height() < 10:
+        # start_pos/end_pos が None の場合は何もしない
+        if self.start_pos is None or self.end_pos is None:
             return
-            
+
+        # 選択領域を別名で保持（QWidget.rect と衝突しないようにする）
+        self.selection_rect: QRect = QRect(self.start_pos, self.end_pos).normalized()
+        if self.selection_rect.width() < 10 or self.selection_rect.height() < 10:
+            return
+
         screen = QApplication.primaryScreen()
         self.hide() # 自分自身を隠してキャプチャ
         QApplication.processEvents() # 再描画を待機
-        self.capture_pixmap = screen.grabWindow(0, self.rect.x(), self.rect.y(), self.rect.width(), self.rect.height())
+        self.capture_pixmap = screen.grabWindow(0, self.selection_rect.x(), self.selection_rect.y(), self.selection_rect.width(), self.selection_rect.height())
 
 # QApplication インスタンスを作成
 app = QApplication(sys.argv)
@@ -185,7 +247,19 @@ app = QApplication(sys.argv)
 def show_dialog(default_source="capture", default_format="text", default_turn="auto", last_rect=None):
     # 設定の選択
     dialog = SelectionDialog(default_source, default_format, default_turn, last_rect)
-    if dialog.exec() != QDialog.Accepted:
+
+    # F4 をグローバルホットキーとして登録し、押下時にダイアログの OK 相当処理を呼ぶ
+    emitter = HotkeyEmitter()
+    emitter.hotkey_pressed.connect(dialog.accept_settings)
+    holder: dict = {}
+    listener_thread = threading.Thread(target=_start_windows_hotkey_listener, args=(emitter, holder), daemon=True)
+    listener_thread.start()
+
+    if dialog.exec() != QDialog.Accepted:  # type: ignore[attr-defined]
+        # ダイアログ終了時はホットキースレッドを停止させる
+        if "thread_id" in holder:
+            ctypes.windll.user32.PostThreadMessageW(holder["thread_id"], 0x0012, 0, 0)  # WM_QUIT
+        listener_thread.join(timeout=0.5)
         sys.exit()
 
     image = None
@@ -202,7 +276,7 @@ def show_dialog(default_source="capture", default_format="text", default_turn="a
         pixmap = screen.grabWindow(0, last_rect.x(), last_rect.y(), last_rect.width(), last_rect.height())
         # QPixmap を numpy 形式 (OpenCV) に変換
         from PySide6.QtGui import QImage
-        qimage = pixmap.toImage().convertToFormat(QImage.Format_RGBA8888)
+        qimage = pixmap.toImage().convertToFormat(QImage.Format_RGBA8888)  # type: ignore[attr-defined]
         width = qimage.width()
         height = qimage.height()
         ptr = qimage.bits()
@@ -217,10 +291,10 @@ def show_dialog(default_source="capture", default_format="text", default_turn="a
             app.processEvents()
         
         if overlay.capture_pixmap:
-            last_rect = overlay.rect
+            last_rect = overlay.selection_rect
             # QPixmap を numpy 形式 (OpenCV) に変換
             from PySide6.QtGui import QImage
-            qimage = overlay.capture_pixmap.toImage().convertToFormat(QImage.Format_RGBA8888)
+            qimage = overlay.capture_pixmap.toImage().convertToFormat(QImage.Format_RGBA8888)  # type: ignore[attr-defined]
             width = qimage.width()
             height = qimage.height()
             ptr = qimage.bits()
@@ -232,6 +306,11 @@ def show_dialog(default_source="capture", default_format="text", default_turn="a
             print("No area selected.")
             sys.exit()
 
+    # ダイアログ終了後はホットキーリスナーを停止
+    if "thread_id" in holder:
+        ctypes.windll.user32.PostThreadMessageW(holder["thread_id"], 0x0012, 0, 0)  # WM_QUIT
+        listener_thread.join(timeout=0.5)
+
     if image is None or image.size == 0:
         print("Failed to load/capture image.")
         sys.exit()
@@ -239,7 +318,7 @@ def show_dialog(default_source="capture", default_format="text", default_turn="a
 
     # 解析に当たってのヒント情報
     hint = br.Hint()
-    hint.mode = br.Mode.PHOTO # 写真モード
+    hint.mode = br.Mode.PHOTO # 写真モード  # type: ignore[attr-defined]
 
     # 認識に使用するクラス。ここでは自動認識を使用する
     # 自動認識の場合、実盤/スクリーンショット/白黒書籍を自動判断する
@@ -260,6 +339,9 @@ def show_dialog(default_source="capture", default_format="text", default_turn="a
         result = None
 
     if ret:
+        assert result is not None
+        # 明示的に Any にキャストして型チェックの警告を抑制
+        result = cast(Any, result)
         # 成功した場合は結果を描画
         CELL = 40
         SIZE = CELL * 8
