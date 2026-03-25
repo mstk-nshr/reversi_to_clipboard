@@ -69,6 +69,33 @@ def is_libreoffice_calc_focused() -> bool:
     return ("libreoffice" in t and "calc" in t) or ("calc" in t and "libreoffice" in t) or ("libreoffice calc" in t)
 
 
+def find_egaroucid_window() -> Optional[int]:
+    """Egaroucid アプリのウィンドウハンドルを探す。"""
+    user32 = ctypes.windll.user32
+    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+    found_hwnd = []
+
+    def callback(hwnd, lparam):
+        if user32.IsWindowVisible(hwnd):
+            buf = ctypes.create_unicode_buffer(512)
+            user32.GetWindowTextW(hwnd, buf, 512)
+            if "egaroucid" in buf.value.lower():
+                found_hwnd.append(hwnd)
+                return False
+        return True
+
+    user32.EnumWindows(WNDENUMPROC(callback), 0)
+    return found_hwnd[0] if found_hwnd else None
+
+
+def activate_window(hwnd: int):
+    """指定したハンドルのウィンドウを最前面に持ってくる。"""
+    user32 = ctypes.windll.user32
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+    user32.SetForegroundWindow(hwnd)
+
+
 def send_ctrl_v():
     """Send Ctrl+V to the active window using keybd_event (simple, reliable).
 
@@ -89,6 +116,20 @@ def send_ctrl_v():
     user32.keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0)
     # release ctrl
     user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+
+
+def send_down_key():
+    """Send a single Down-arrow key press using keybd_event."""
+    user32 = ctypes.windll.user32
+    VK_DOWN = 0x28
+    KEYEVENTF_KEYUP = 0x0002
+
+    # press Down
+    user32.keybd_event(VK_DOWN, 0, 0, 0)
+    # short delay
+    time.sleep(0.02)
+    # release Down
+    user32.keybd_event(VK_DOWN, 0, KEYEVENTF_KEYUP, 0)
 
 if TYPE_CHECKING:
     # Type-checker-only fallbacks for attributes that some PySide6 stubs may miss
@@ -506,8 +547,21 @@ def show_dialog(default_source="capture", default_format="text", default_turn="a
     try:
         if is_libreoffice_calc_focused():
             send_ctrl_v()
+            # 小さな遅延の後に Down キーを送信して次の行へ移動
+            time.sleep(0.05)
+            send_down_key()
     except Exception as e:
         print(f"Auto-paste failed: {e}")
+
+    # Egaroucid が開いている場合はアクティブにして Ctrl+V を送信
+    try:
+        egaroucid_hwnd = find_egaroucid_window()
+        if egaroucid_hwnd:
+            activate_window(egaroucid_hwnd)
+            time.sleep(0.1)  # アクティブ化を待つ
+            send_ctrl_v()
+    except Exception as e:
+        print(f"Egaroucid auto-paste failed: {e}")
 
     return dialog, last_rect
 
